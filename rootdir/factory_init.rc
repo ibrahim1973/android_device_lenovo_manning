@@ -3,13 +3,13 @@
 # IMPORTANT: Do not create world writable files or directories.
 # This is a common source of Android security bugs.
 #
-import factory_init.connectivity.rc
+import ${ro.mtkrc.path}factory_init.connectivity.rc
 import /init.environ.rc
-import init.fon.rc
-import init.trustonic.rc
-import init.nvdata.rc
-import init.microtrust.rc
-import init.aee.rc
+import /vendor/etc/init/trustonic.rc
+import ${ro.mtkrc.path}init.nvdata.rc
+import /vendor/etc/init/microtrust.rc
+import /vendor/etc/init/hw/init.aee.rc
+import /vendor/etc/init/hw/factory_init.project.rc
 
 on early-init
     # Set init and its forked children's oom_adj.
@@ -131,8 +131,26 @@ loglevel 5
     write /proc/sys/kernel/sched_tunable_scaling 0
     write /proc/sys/kernel/sched_latency_ns 10000000
     write /proc/sys/kernel/sched_wakeup_granularity_ns 2000000
-    write /proc/sys/kernel/sched_compat_yield 1
     write /proc/sys/kernel/sched_child_runs_first 0
+    write /proc/sys/kernel/randomize_va_space 2
+    write /proc/sys/vm/mmap_min_addr 32768
+    write /proc/sys/net/ipv4/ping_group_range "0 2147483647"
+    write /proc/sys/net/unix/max_dgram_qlen 600
+    write /proc/sys/kernel/sched_rt_runtime_us 950000
+    write /proc/sys/kernel/sched_rt_period_us 1000000
+    # Assign reasonable ceiling values for socket rcv/snd buffers.
+    # These should almost always be overridden by the target per the
+    # the corresponding technology maximums.
+    write /proc/sys/net/core/rmem_max  262144
+    write /proc/sys/net/core/wmem_max  262144
+    # reflect fwmark from incoming packets onto generated replies
+    write /proc/sys/net/ipv4/fwmark_reflect 1
+    write /proc/sys/net/ipv6/fwmark_reflect 1
+    # set fwmark on accepted sockets
+    write /proc/sys/net/ipv4/tcp_fwmark_accept 1
+    # disable icmp redirects
+    write /proc/sys/net/ipv4/conf/all/accept_redirects 0
+    write /proc/sys/net/ipv6/conf/all/accept_redirects 0
 
     #INTERNAL_START
     mkdir /protect_f 0771 system system
@@ -141,8 +159,15 @@ loglevel 5
     mkdir /custom
 
     mkdir /mnt/cd-rom 0000 system system
-    #INTERNAL_END
 
+    #INTERNAL_END
+    # enable armv8_deprecated instruction hooks
+    write /proc/sys/abi/swp 1
+    # Linux's execveat() syscall may construct paths containing /dev/fd
+    # expecting it to point to /proc/self/fd
+    symlink /proc/self/fd /dev/fd
+    # set RLIMIT_NICE to allow priorities from 19 to -20
+    setrlimit 13 40 40
     # Healthd can trigger a full boot from charger mode by signaling this
     # property when the power button is held.
     on property:sys.boot_from_charger_mode=1
@@ -157,6 +182,10 @@ loglevel 5
     load_persist_props
     start logd
     start logd-reinit
+
+# Indicate to fw loaders that the relevant mounts are up.
+on firmware_mounts_complete
+    rm /dev/.booting
 
     # Mount filesystems and start core system services.
     on late-init
@@ -174,6 +203,7 @@ loglevel 5
     trigger post-fs-data
     trigger load_persist_props_action
 
+    trigger firmware_mounts_complete
 
     trigger early-boot
     trigger boot
@@ -187,7 +217,7 @@ on fs
 
 #INTERNAL_START
     write /proc/bootprof "INIT:Mount_START"
-    mount_all /fstab.mt6797 multi_init.rc
+    mount_all /vendor/etc/fstab.mt6797 ${ro.mtkrc.path}multi_init.rc
     write /proc/bootprof "INIT:Mount_END"
 #INTERNAL_END
 # mount different fs end
@@ -195,6 +225,8 @@ on fs
 on post-fs
 
     start logd
+    start hwservicemanager
+    start keymaster-3-0
     # once everything is setup, no need to modify /
     mount rootfs rootfs / ro remount
     # Mount shared so changes propagate into child namespaces
@@ -261,9 +293,6 @@ on post-fs-data
     # We restorecon /data in case the userdata partition has been reset.
     restorecon /data
 
-    # start debuggerd to make debugging early-boot crashes easier.
-    start debuggerd
-    start debuggerd64
 
     # We chown/chmod /data again so because mount is run as root + defaults
 
@@ -511,6 +540,8 @@ on boot
     hostname localhost
     domainname localdomain
 
+    setprop logmuch.detect.value 10000
+
     #INTERNAL_START
     # Start default class, this line is very important!!
     class_start default
@@ -518,8 +549,6 @@ on boot
     class_start core
 
 on nonencrypted
-    # A/B update verifier that marks a successful boot.
-    exec - root -- /system/bin/update_verifier nonencrypted
     class_start main
     class_start late_start
 
@@ -545,13 +574,9 @@ on property:vold.decrypt=trigger_post_fs_data
     trigger post-fs-data
 
 on property:vold.decrypt=trigger_restart_min_framework
-    # A/B update verifier that marks a successful boot.
-    exec - root -- /system/bin/update_verifier trigger_restart_min_framework
     class_start main
 
 on property:vold.decrypt=trigger_restart_framework
-    # A/B update verifier that marks a successful boot.
-    exec - root -- /system/bin/update_verifier trigger_restart_framework
     start nvram_daemon
     class_start main
     class_start late_start
@@ -560,6 +585,26 @@ on property:vold.decrypt=trigger_restart_framework
 on property:vold.decrypt=trigger_shutdown_framework
     class_reset late_start
     class_reset main
+
+# One shot invocation to deal with encrypted volume.
+on defaultcrypto
+    exec - root -- /system/bin/vdc --wait cryptfs mountdefaultencrypted
+    # vold will set vold.decrypt to trigger_restart_framework (default
+    # encryption) or trigger_restart_min_framework (other encryption)
+
+# One shot invocation to encrypt unencrypted volumes
+# mtk modification:
+#   To speed up the booting in meta/factory mode, we don't encrypt the device.
+#   And then handle it as 'unencrypted' state.
+on encrypt
+    mount ext4 /dev/block/platform/mtk-msdc.0/11230000.msdc0/by-name/userdata /data noatime nosuid nodev noauto_da_alloc discard wait
+    setprop ro.crypto.fake_encrypt 1
+    setprop vold.post_fs_data_done 0
+    trigger post-fs-data
+on property:ro.crypto.fake_encrypt=1 && property:vold.post_fs_data_done=1
+    trigger load_persist_props_action
+    setprop ro.crypto.state unencrypted
+    setprop vold.decrypt trigger_restart_framework
 
 service ueventd /sbin/ueventd
     class core
@@ -635,24 +680,57 @@ service nvram_daemon /vendor/bin/nvram_daemon
     group system
     oneshot
 
-service mdlogger /vendor/bin/mdlogger
+service mdlogger /system/bin/mdlogger
     class main
     user shell
     group shell system radio sdcard_rw inet
     disabled
     oneshot
 
-service dualmdlogger /vendor/bin/dualmdlogger
+service dualmdlogger /system/bin/dualmdlogger
     class main
     user shell
     group shell system radio sdcard_rw inet
     disabled
     oneshot
 
-service factory_no_image /vendor/bin/factory
+service emdlogger1 /system/bin/emdlogger1
+    class main
+    user shell
+    group system shell radio sdcard_rw inet sdcard_r media_rw
+    disabled
+    oneshot
 
-service mobile_log_d /vendor/bin/mobile_log_d
-	class main
+service emdlogger2 /system/bin/emdlogger2
+    class main
+    user shell
+    group system shell radio sdcard_rw inet sdcard_r media_rw
+    disabled
+    oneshot
+
+service emdlogger3 /system/bin/emdlogger3
+    class main
+    user shell
+    group system shell radio sdcard_rw inet sdcard_r media_rw
+    disabled
+    oneshot
+
+service emdlogger5 /system/bin/emdlogger5
+    class main
+    user shell
+    group system shell radio sdcard_rw inet sdcard_r media_rw
+    disabled
+    oneshot
+
+service emdlogger6 /system/bin/emdlogger6
+    class main
+    user shell
+    group system shell radio sdcard_rw inet sdcard_r media_rw
+    disabled
+    oneshot
+
+service factory_no_image /system/bin/factory
+
 
 ## Custom service area (END)
 

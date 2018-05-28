@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 The Android Open Source Project
+ * Copyright (C) 2016 CyanogenMod
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define LOG_TAG "PowerHAL"
+#define LOG_TAG "MTK PowerHAL"
 #include <utils/Log.h>
 
 #include <hardware/hardware.h>
@@ -64,9 +64,11 @@ static void power_fwrite(const char *path, char *s)
 
 static void power_hint(struct power_module *module, power_hint_t hint,
                        void *data) {
+    int32_t dataint = -1;
     switch (hint) {
         case POWER_HINT_LOW_POWER:
-            if (data) {
+            dataint = *(int32_t *)data;
+            if (dataint) {
                 power_fwrite(MT_FPS_UPPER_BOUND_PATH, "30");
                 power_fwrite(MT_RUSH_BOOST_PATH, "0");
             } else {
@@ -78,20 +80,27 @@ static void power_hint(struct power_module *module, power_hint_t hint,
         case POWER_HINT_VSYNC:
         case POWER_HINT_INTERACTION:
         case POWER_HINT_CPU_BOOST:
-        case POWER_HINT_LAUNCH:
+        case POWER_HINT_LAUNCH_BOOST:
+        case POWER_HINT_AUDIO:
         case POWER_HINT_SET_PROFILE:
         case POWER_HINT_VIDEO_ENCODE:
         case POWER_HINT_VIDEO_DECODE:
         break;
-        case POWER_HINT_SUSTAINED_PERFORMANCE:
-            ALOGI("POWER_HINT_SUSTAINED_PERFORMANCE");
-            break;
-        case POWER_HINT_VR_MODE:
-            ALOGI("POWER_HINT_VR_MODE");
-            break;
     default:
         break;
     }
+}
+
+void set_feature(struct power_module *module, feature_t feature, int state)
+{
+#ifdef TAP_TO_WAKE_NODE
+    char tmp_str[64];
+    if (feature == POWER_FEATURE_DOUBLE_TAP_TO_WAKE) {
+        snprintf(tmp_str, 64, "%d", state);
+        power_fwrite(TAP_TO_WAKE_NODE, tmp_str);
+        return;
+    }
+#endif
 }
 
 static struct hw_module_methods_t power_module_methods = {
@@ -104,12 +113,13 @@ struct power_module HAL_MODULE_INFO_SYM = {
         .module_api_version = POWER_MODULE_API_VERSION_0_2,
         .hal_api_version = HARDWARE_HAL_API_VERSION,
         .id = POWER_HARDWARE_MODULE_ID,
-        .name = "Mediatek Power HAL",
-        .author = "The Android Open Source Project",
+        .name = "MTK Power HAL",
+        .author = "Cyanogen",
         .methods = &power_module_methods,
     },
 
     .init = power_init,
     .setInteractive = power_set_interactive,
     .powerHint = power_hint,
+    .setFeature = set_feature,
 };

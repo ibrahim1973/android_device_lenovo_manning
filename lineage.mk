@@ -15,10 +15,10 @@
 #
 
 # Inherit some common LineageOS stuff.
-$(call inherit-product, vendor/cm/config/common_full_phone.mk)
+$(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
 # Inherit device configuration
-$(call inherit-product, $(LOCAL_PATH)/device_manning.mk)
+$(call inherit-product, $(LOCAL_PATH)/device.mk)
 
 # Device display
 TARGET_SCREEN_HEIGHT := 1920
@@ -31,5 +31,3 @@ PRODUCT_MANUFACTURER := lenovo
 PRODUCT_MODEL := Lenovo K8 Note
 PRODUCT_NAME := lineage_manning
 PRODUCT_RELEASE_NAME := manning
-
-PRODUCT_BUILD_PROP_OVERRIDES += PRODUCT_NAME=lineage_manning_retail

@@ -1,0 +1,15 @@
+# Mediatek Android Patches
+Oreo Patches Needed To Be Applied On Source For 8.x To Work on MediaTek
+
+### Note : 
+	```device/manufacturer/codename``` - must be edited to suite your device tree 
+ 
+example : ```device/lenovo/manning``` 
+
+
+### To Apply :
+
+```sh ./device/lenovo/manning/patches/apply-patches.sh```
+
+```sh ./device/lenovo/manning/patches/check-patches.sh```
+
