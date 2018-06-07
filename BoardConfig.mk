@@ -236,6 +236,9 @@ BOARD_USE_CUSTOM_RECOVERY_FONT := \"roboto_15x24.h\"
 TARGET_RECOVERY_PIXEL_FORMAT := "RGBA_8888"
 endif
 
+# SELinux Policy
+BOARD_SEPOLICY_DIRS := $(DEVICE_PATH)/sepolicy
+
 # Seccomp Filter
 BOARD_SECCOMP_POLICY := \
        $(LOCAL_PATH)/seccomp
