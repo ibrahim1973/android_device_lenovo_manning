@@ -202,13 +202,10 @@ PRODUCT_COPY_FILES += \
 
 # Rootdir
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/enableswap.sh:root/enableswap.sh \
     $(LOCAL_PATH)/rootdir/factory_init.rc:root/factory_init.rc \
-    $(LOCAL_PATH)/rootdir/fstab.mt6797:root/fstab.mt6797 \
+	$(LOCAL_PATH)/rootdir/fstab.enableswap:/root/fstab.enableswap \
 	$(LOCAL_PATH)/rootdir/init.rc:root/init.rc \
     $(LOCAL_PATH)/rootdir/init.recovery.mt6797.rc:root/init.recovery.mt6797.rc \
-	$(LOCAL_PATH)/rootdir/init.zygote32.rc:root/init.zygote32.rc \
-    $(LOCAL_PATH)/rootdir/init.zygote64_32.rc:root/init.zygote64_32.rc \
     $(LOCAL_PATH)/rootdir/meta_init.rc:root/meta_init.rc	
 	
 # Audio Configurations
