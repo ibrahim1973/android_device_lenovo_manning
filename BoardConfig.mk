@@ -249,3 +249,6 @@ MTK_FM_SUPPORT := true
 #Allow missing dependencies
 ALLOW_MISSING_DEPENDENCIES=true
 
+# Fingerprint
+FINGERPRINT_SUPPORT := true
+
