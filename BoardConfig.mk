@@ -239,6 +239,10 @@ endif
 # SELinux Policy
 BOARD_SEPOLICY_DIRS := $(DEVICE_PATH)/sepolicy
 
+# Seccomp Filter
+BOARD_SECCOMP_POLICY := \
+       $(LOCAL_PATH)/seccomp
+	   
 #FMRadio
 MTK_FM_SUPPORT := true
 
